@@ -17,9 +17,10 @@ const ui = {
 };
 
 let active = false;
-let customAPI = localStorage.getItem("magnus_api") || ""; // Save URL between reloads
+// Load saved URL if it exists
+let customAPI = localStorage.getItem("magnus_api") || ""; 
 
-// --- AUDIO ---
+// --- ROBUST AUDIO ---
 function speak(text) {
     return new Promise(resolve => {
         if (!text) { resolve(); return; }
@@ -48,25 +49,25 @@ async function broadcastLoop() {
         
         let mediaUrl;
         
-        // CHECK: Do we have a Custom Colab URL?
+        // 1. CHECK FOR COLAB GPU CONNECTION
         if (customAPI && customAPI.includes("trycloudflare.com")) {
-             ui.status.innerText = "SYSTEM: COLAB GPU (T4)...";
+             ui.status.innerText = "SYSTEM: COLAB T4 GPU...";
              try {
-                 // Hit your private server
                  const res = await fetch(`${customAPI}/generate`, {
                      method: 'POST',
                      headers: {'Content-Type': 'application/json'},
                      body: JSON.stringify({ prompt: scene.visual })
                  });
+                 if (!res.ok) throw new Error("GPU Error");
                  const blob = await res.blob();
                  mediaUrl = URL.createObjectURL(blob);
              } catch(e) {
-                 console.warn("Colab Disconnected. Falling back to Flux.");
-                 customAPI = ""; // Reset if dead
+                 console.warn("Colab Disconnected. Falling back.");
+                 ui.status.innerText = "SYSTEM: GPU LOST. FALLBACK...";
              }
         }
 
-        // Fallback to Flux if Colab is not set or dead
+        // 2. FALLBACK TO FLUX (If Colab is missing/dead)
         if (!mediaUrl) {
              ui.status.innerText = "SYSTEM: FLUX CLOUD...";
              const seed = character.getSeed();
@@ -74,16 +75,16 @@ async function broadcastLoop() {
              mediaUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&uid=${uid}`;
         }
 
-        // Preload
+        // 3. PRELOAD
         await new Promise((resolve, reject) => {
             const img = new Image();
-            const t = setTimeout(() => reject("Timeout"), 10000);
+            const t = setTimeout(() => reject("Timeout"), 15000); // 15s wait for GPU
             img.onload = () => { clearTimeout(t); resolve(); };
             img.onerror = () => { clearTimeout(t); reject("Failed"); };
             img.src = mediaUrl;
         });
 
-        // Play
+        // 4. PLAY
         ui.status.innerText = "SYSTEM: BROADCASTING";
         vfx.trigger();
         music.swell();
@@ -92,6 +93,7 @@ async function broadcastLoop() {
         ui.sub.innerText = scene.narration;
         await speak(scene.narration);
 
+        // 5. LOOP
         await new Promise(r => setTimeout(r, 2000));
 
     } catch (e) {
@@ -100,27 +102,41 @@ async function broadcastLoop() {
     broadcastLoop();
 }
 
-// --- CONFIG MODE ---
-// Long press "INITIATE" to set Custom URL
-let pressTimer;
-ui.btn.addEventListener('touchstart', () => {
-    pressTimer = setTimeout(() => {
-        const url = prompt("ENTER COLAB URL (trycloudflare.com):", customAPI);
-        if(url) {
-            customAPI = url;
-            localStorage.setItem("magnus_api", url);
-            alert("GPU LINKED. POWER UNLIMITED.");
-        }
-    }, 1000);
-});
-ui.btn.addEventListener('touchend', () => clearTimeout(pressTimer));
-
-// --- START ---
+// --- SMART IGNITION ---
 ui.btn.addEventListener('click', () => {
-    if (!ui.prompt.value) return;
+    const inputVal = ui.prompt.value.trim();
+
+    // MAGNUS SMART-LINK PROTOCOL
+    // If the user pasted the Cloudflare URL, save it and don't start the movie yet.
+    if (inputVal.includes("trycloudflare.com")) {
+        localStorage.setItem("magnus_api", inputVal);
+        customAPI = inputVal;
+        
+        // Visual Confirmation
+        ui.prompt.value = "";
+        ui.prompt.placeholder = "GPU LINKED! Enter Mission Now...";
+        ui.status.innerText = "SYSTEM: T4 GPU ONLINE";
+        ui.btn.innerText = "GPU LINKED - CLICK TO START";
+        ui.btn.style.background = "#00ff00";
+        ui.btn.style.color = "#000";
+        
+        alert("✅ NEURAL BRIDGE ESTABLISHED.\n\nThe T4 Supercomputer is linked.\nNow type your movie concept (e.g. 'Cyberpunk Rain') and click again.");
+        return;
+    }
+
+    if (!inputVal) return alert("Enter a Concept!");
+
+    // Start the Show
     ui.btn.innerText = "SYSTEM ACTIVE";
     ui.panel.style.opacity = '0';
     music.startDrone();
     active = true;
     broadcastLoop();
 });
+
+// On Load check if we already have a GPU saved
+if (localStorage.getItem("magnus_api")) {
+    customAPI = localStorage.getItem("magnus_api");
+    ui.status.innerText = "SYSTEM: GPU READY";
+    ui.prompt.placeholder = "GPU Linked. Enter Mission...";
+        }
