@@ -16,29 +16,35 @@ header {
     background: linear-gradient(to bottom, #000, transparent);
 }
 .brand { color: var(--neon); font-weight: bold; letter-spacing: 2px; }
-#sysStatus { font-size: 0.7rem; color: #888; }
+#sysStatus { font-size: 0.7rem; color: #888; font-weight: bold; }
 
 #stage {
     position: relative; width: 100vw; height: 100vh; background: #050505;
     display: flex; justify-content: center; align-items: center; overflow: hidden;
 }
 
-/* THE VIDEO PLAYER */
-#scenePlayer {
-    width: 100%; height: 100%; object-fit: cover;
-    transition: opacity 1s ease-in-out;
+/* DOUBLE BUFFER LAYERS */
+.viewer {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; transition: opacity 0.5s ease-in-out;
+    transform: translate3d(0,0,0); /* Force GPU */
 }
-#staticOverlay {
-    position: absolute; width: 100%; height: 100%; object-fit: cover;
-    opacity: 0.2; mix-blend-mode: overlay; pointer-events: none;
+.viewer.active {
+    opacity: 1;
+    animation: cinematicPan 20s infinite alternate ease-in-out;
 }
+@keyframes cinematicPan { 0% { transform: scale(1.0) translate3d(0,0,0); } 100% { transform: scale(1.15) translate3d(0,0,0); } }
+
+/* GLITCH FX */
+.glitch-active { filter: invert(1) hue-rotate(180deg); transform: scale(1.02) !important; transition: 0.1s; }
 
 #subtitleContainer {
-    position: absolute; bottom: 20%; width: 100%; display: flex; justify-content: center; z-index: 25;
+    position: absolute; bottom: 25%; width: 100%; display: flex; justify-content: center; z-index: 25;
 }
 #subtitleBox {
     background: var(--glass); color: var(--neon); padding: 15px; border-left: 3px solid var(--neon);
     font-size: 1rem; max-width: 85%; box-shadow: 0 10px 30px #000;
+    max-height: 100px; overflow: hidden; text-overflow: ellipsis;
 }
 
 #controlPanel {
