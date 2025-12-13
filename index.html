@@ -3,9 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>INFINITE: TURBO</title>
+    <title>INFINITE: WAN 2.2 SOTA</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://image.pollinations.ai">
+    
+    <!-- THE KEY TO THE GARDEN -->
+    <script src="https://js.puter.com/v2/"></script>
+    
+    <!-- FALLBACK BRAIN -->
     <link rel="preconnect" href="https://text.pollinations.ai">
 </head>
 <body>
@@ -14,20 +18,23 @@
     
     <main id="app">
         <header>
-            <div class="brand">INFINITE://TURBO</div>
-            <div class="hud" id="sysStatus">SYSTEM: READY</div>
+            <div class="brand">INFINITE://WAN-2.2</div>
+            <div class="hud" id="sysStatus">SYSTEM: ONLINE</div>
         </header>
 
         <div id="stage">
-            <img id="sceneImg" src="https://image.pollinations.ai/prompt/static%20noise?width=720&height=1280&nologo=true" alt="Signal">
+            <!-- Video Player for SOTA Content -->
+            <video id="scenePlayer" autoplay muted playsinline loop style="opacity:0"></video>
+            <img id="staticOverlay" src="https://image.pollinations.ai/prompt/static%20noise?nologo=true">
+            
             <div id="subtitleContainer">
-                <div id="subtitleBox">Awaiting Concept...</div>
+                <div id="subtitleBox">Awaiting Neural Uplink...</div>
             </div>
         </div>
 
         <div id="controlPanel">
-            <input type="text" id="prompt" placeholder="Enter Movie Concept (e.g. Neon Samurai)..." autocomplete="off">
-            <button id="startBtn">IGNITE ENGINE</button>
+            <input type="text" id="prompt" placeholder="Enter High-End Concept..." autocomplete="off">
+            <button id="startBtn">IGNITE WAN ENGINE</button>
         </div>
     </main>
 
