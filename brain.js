@@ -10,7 +10,7 @@ export class Director {
     async getNextScene(topic) {
         const history = this.context.slice(-2).join(" -> ");
         const name = character.getName();
-        // We optimize prompt for Wan 2.2 (needs clear physical instructions)
+        // Prompt engineered for Wan 2.1 (Needs physics keywords)
         const system = `
             ROLE: Cinema Director.
             CHARACTER: ${name}.
@@ -47,7 +47,7 @@ export class Director {
 
     getFallback() {
         return { 
-            narration: "Visual link stabilizing...", 
+            narration: "Neural uplink stabilizing...", 
             visual: character.enrichPrompt("standing in digital void, static noise") 
         };
     }
