@@ -6,16 +6,10 @@ export class Director {
     constructor() {
         this.context = [];
         this.baseUrl = "https://text.pollinations.ai/";
-        this.errorCount = 0;
+        this.retryCount = 0;
     }
 
     async getNextScene(topic) {
-        // RATE LIMIT SAFETY: If we hit too many errors, use local mode for a bit
-        if (this.errorCount > 3) {
-            this.errorCount--; // Slowly recover
-            return this.getLocalBackup(topic);
-        }
-
         const history = this.context.slice(-2).join(" -> ");
         const name = character.getName();
 
@@ -29,9 +23,9 @@ export class Director {
         `;
 
         try {
-            // CRITICAL: 5 Second Timeout
+            // 1. ATTEMPT CONNECTION
             const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 5000);
+            const id = setTimeout(() => controller.abort(), 8000); // 8s Timeout
 
             const res = await fetch(`${this.baseUrl}${encodeURIComponent(system)}`, {
                 signal: controller.signal
@@ -40,13 +34,19 @@ export class Director {
             
             const raw = await res.text();
 
-            // ERROR TRAP: Check if API sent an error message
-            if (raw.includes("error") || raw.includes("Queue full") || raw.length < 5) {
-                console.warn("Brain Rate Limit Hit");
-                this.errorCount += 2;
-                return this.getLocalBackup(topic);
+            // 2. ERROR DETECTION (The Logic, not the Lie)
+            // If the response is the "Queue Full" JSON error
+            if (raw.trim().startsWith("{") || raw.includes('"error"')) {
+                console.warn("API Error Detected:", raw);
+                return this.handleError(topic, "QUEUE FULL");
             }
-            
+
+            // If the response is HTML (Server down)
+            if (raw.trim().startsWith("<")) {
+                return this.handleError(topic, "SERVER BUSY");
+            }
+
+            // 3. SUCCESSFUL PARSE
             let narration = "";
             let action = "";
 
@@ -58,30 +58,40 @@ export class Director {
                 action = `${topic}, cinematic scene of ${name}`;
             }
 
-            // Success - reduce error count
-            this.errorCount = 0;
+            // Clean up prompt length so it doesn't overflow
+            if (narration.length > 200) narration = narration.substring(0, 199) + ".";
 
             const finalVisual = character.enrichPrompt(action);
             this.context.push(narration);
-            return { narration, visual: finalVisual };
+            this.retryCount = 0; // Reset error count on success
+            
+            return { narration, visual: finalVisual, status: "OK" };
 
         } catch (e) {
-            this.errorCount++;
-            return this.getLocalBackup(topic);
+            console.error("Fetch Error:", e);
+            return this.handleError(topic, "TIMEOUT");
         }
     }
 
-    getLocalBackup(topic) {
-        // Local phrases so the movie never stops even if WiFi dies
-        const backups = [
-            "Scanning the perimeter for hostiles...",
-            "The signal is degrading, re-calibrating sensors...",
-            "Moving deeper into the shadow zone...",
-            "Data stream buffering, holding position..."
-        ];
-        const randomNarration = backups[Math.floor(Math.random() * backups.length)];
-        const visual = character.enrichPrompt(`${topic}, dark atmosphere, static, glitch, 8k`);
+    async handleError(topic, reason) {
+        this.retryCount++;
         
-        return { narration: randomNarration, visual: visual };
+        // Update the UI status directly to be honest with the Operator
+        const statusEl = document.getElementById('sysStatus');
+        if(statusEl) statusEl.innerText = `SYSTEM: ${reason} (RETRY ${this.retryCount})`;
+
+        // Wait 3 seconds and try again (Recursive Retry)
+        await new Promise(r => setTimeout(r, 3000));
+        
+        // If we fail 5 times, THEN we fall back to local logic to keep the show running
+        if (this.retryCount > 5) {
+            return {
+                narration: `The data stream is buffering. Holding pattern active.`,
+                visual: character.enrichPrompt("atmospheric idle scene, floating particles"),
+                status: "FALLBACK"
+            };
+        }
+
+        return this.getNextScene(topic);
     }
 }
