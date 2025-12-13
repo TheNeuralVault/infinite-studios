@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>INFINITE STUDIO: ARIA PLATINUM</title>
     <link rel="stylesheet" href="style.css">
+    <!-- SPEED OPTIMIZATION: Pre-connect to Cloud -->
+    <link rel="preconnect" href="https://image.pollinations.ai">
+    <link rel="preconnect" href="https://text.pollinations.ai">
 </head>
 <body>
-    <!-- VISUAL FX LAYERS -->
     <div id="scanlines"></div>
     <div id="vignette"></div>
-    <!-- Glitch Canvas injected by vfx.js -->
-
+    
     <main id="app">
-        <!-- HEADS UP DISPLAY -->
         <header>
             <div class="brand">INFINITE://ARIA</div>
             <div class="hud">
@@ -21,27 +21,21 @@
             </div>
         </header>
 
-        <!-- THE STAGE (9:16 VERTICAL) -->
         <div id="stage">
-            <!-- Visual Feed -->
             <img id="sceneImg" src="https://image.pollinations.ai/prompt/static%20noise?width=720&height=1280&nologo=true" alt="Neural Feed">
-            
-            <!-- Narrative Overlay -->
             <div id="subtitleContainer">
                 <div id="subtitleBox">Awaiting Platinum Protocol...</div>
             </div>
         </div>
 
-        <!-- CONTROL DECK -->
         <div id="controlPanel">
             <div class="input-row">
-                <input type="text" id="prompt" placeholder="Enter Mission (e.g. Infiltrate the Neon Spire)..." autocomplete="off">
+                <input type="text" id="prompt" placeholder="Enter Mission (e.g. Escape the City)..." autocomplete="off">
             </div>
-            <button id="startBtn">INITIATE PLATINUM STREAM</button>
+            <button id="startBtn">INITIATE STREAM</button>
         </div>
     </main>
 
-    <!-- THE ORCHESTRATOR -->
     <script type="module" src="main.js"></script>
 </body>
 </html>
