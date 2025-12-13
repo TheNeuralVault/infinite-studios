@@ -18,9 +18,8 @@ const ui = {
 };
 
 let active = false;
-let mode = 'flux'; // Default to Flux, upgrade to WAN if login succeeds
 
-// --- AUDIO ---
+// --- AUDIO ENGINE ---
 function speak(text) {
     return new Promise(resolve => {
         if (!text) { resolve(); return; }
@@ -29,6 +28,7 @@ function speak(text) {
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.9; u.pitch = 0.8;
         
+        // Android Voice Fix
         const voices = synth.getVoices();
         if (voices.length > 0) u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
 
@@ -39,57 +39,51 @@ function speak(text) {
     });
 }
 
-// --- UNIVERSAL LOOP ---
+// --- HYBRID RENDERER (Wan 2.1 + Flux) ---
 async function broadcastLoop() {
     if (!active) return;
 
     try {
-        // 1. WRITE
+        // 1. WRITE SCENE
         ui.status.innerText = "SYSTEM: WRITING...";
         const topic = ui.prompt.value;
         const scene = await director.getNextScene(topic);
 
-        // 2. RENDER (Branching Logic)
+        // 2. REQUEST SOTA VIDEO (Puter)
+        ui.status.innerText = "SYSTEM: ALLOCATING GPU...";
+        ui.sub.innerText = ">> GENERATING VIDEO (WAN 2.1)...";
+        
         let mediaSource = null;
         let isVideo = false;
 
-        if (mode === 'wan') {
-            ui.status.innerText = "SYSTEM: WAN 2.1 VIDEO...";
-            try {
-                // Try SOTA Video
-                const videoTask = puter.ai.txt2vid(scene.visual);
-                const timeoutTask = new Promise((_, r) => setTimeout(() => r("Timeout"), 15000));
-                const videoObj = await Promise.race([videoTask, timeoutTask]);
-                mediaSource = videoObj.src;
-                isVideo = true;
-            } catch (e) {
-                // SOTA Failed? Fallback to Flux for this frame
-                console.warn("Wan busy, using Flux fallback");
-                mode = 'flux'; // Downgrade temporarily
-            }
-        }
+        try {
+            // We give Puter 15 seconds to generate video. 
+            // If it takes longer (Queue), we switch to Flux Image to keep flow.
+            const videoTask = puter.ai.txt2vid(scene.visual);
+            const timeoutTask = new Promise((_, reject) => setTimeout(() => reject("Timeout"), 15000));
+            
+            // Race: Video vs Clock
+            const videoObj = await Promise.race([videoTask, timeoutTask]);
+            mediaSource = videoObj.src;
+            isVideo = true;
+            console.log("Wan 2.1 Success");
 
-        if (mode === 'flux') {
-            ui.status.innerText = "SYSTEM: FLUX RENDER...";
+        } catch (err) {
+            console.warn("Wan 2.1 Busy/Timeout. Switching to Flux.");
+            ui.status.innerText = "SYSTEM: FLUX FALLBACK...";
             const seed = character.getSeed();
-            // Cache buster + User ID to prevent queue blocking
-            const uid = Math.random().toString(36).substring(7);
-            mediaSource = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&uid=${uid}`;
+            mediaSource = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true`;
             isVideo = false;
         }
 
         // 3. PRELOAD
         if (!isVideo) {
-            await new Promise((resolve, reject) => {
-                const img = new Image();
-                const t = setTimeout(() => reject("Timeout"), 10000);
-                img.onload = () => { clearTimeout(t); resolve(); };
-                img.onerror = () => { clearTimeout(t); reject("Load Failed"); };
-                img.src = mediaSource;
+            await new Promise(r => { 
+                const i = new Image(); i.src = mediaSource; i.onload = r; 
             });
         }
 
-        // 4. PLAY
+        // 4. TRANSITION & PLAY
         ui.status.innerText = "SYSTEM: BROADCASTING";
         vfx.trigger();
         music.swell();
@@ -106,44 +100,44 @@ async function broadcastLoop() {
             ui.img.style.opacity = 1;
         }
 
-        // 5. SPEAK
+        // 5. NARRATE
         ui.sub.innerText = scene.narration;
         await speak(scene.narration);
 
-        // 6. LOOP (Cool down to prevent bans)
-        await new Promise(r => setTimeout(r, 2000));
+        // 6. LOOP
         broadcastLoop();
 
     } catch (e) {
         console.error(e);
-        // If anything breaks, wait 1s and try again (Infinite resilience)
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 2000));
         broadcastLoop();
     }
 }
 
-// --- ROBUST IGNITION ---
+// --- AUTHENTICATION HANDLER ---
 ui.btn.addEventListener('click', async () => {
     if (!ui.prompt.value) return alert("Enter Mission!");
     
-    ui.btn.innerText = "INITIALIZING...";
+    ui.btn.innerText = "AUTHENTICATING...";
     
-    // 1. Try Audio Unlock
-    music.startDrone();
-
-    // 2. Try Puter Login (But don't crash if it fails)
     try {
+        // 1. TRIGGER POPUP (Must be direct user action)
+        // This attempts to create a temp user or log you in
         await puter.auth.signIn({ attempt_temp_user_creation: true });
-        mode = 'wan'; // Success! We have video.
-        ui.status.innerText = "SYSTEM: WAN 2.1 ONLINE";
-    } catch (err) {
-        console.warn("Auth Failed. Switching to Flux Mode.");
-        mode = 'flux'; // Failure handled. Use standard engine.
-        ui.status.innerText = "SYSTEM: STANDARD MODE";
-    }
+        
+        ui.btn.innerText = "ACCESS GRANTED";
+        ui.status.innerText = "SYSTEM: ONLINE";
+        ui.panel.style.opacity = '0';
+        
+        // 2. Start Systems
+        music.startDrone();
+        active = true;
+        
+        // 3. Start Loop
+        broadcastLoop();
 
-    // 3. Start The Show regardless of login status
-    ui.panel.style.opacity = '0';
-    active = true;
-    broadcastLoop();
+    } catch (err) {
+        alert("Authentication Failed. Please allow popups or try again.");
+        ui.btn.innerText = "RETRY CONNECTION";
+    }
 });
