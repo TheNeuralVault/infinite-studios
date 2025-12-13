@@ -8,6 +8,7 @@ const vfx = new VFX();
 const synth = window.speechSynthesis;
 
 const ui = {
+    vid: document.getElementById('sceneVid'),
     img: document.getElementById('sceneImg'),
     sub: document.getElementById('subtitleBox'),
     btn: document.getElementById('startBtn'),
@@ -18,25 +19,6 @@ const ui = {
 
 let active = false;
 
-// --- THE LEGION ARRAY ---
-// We rotate these models to spread the heat.
-const MODELS = ['flux', 'flux-realism', 'turbo', 'midjourney'];
-
-// --- IDENTITY SPOOFER ---
-function generateLegionID() {
-    // Creates a fake 16-character User ID
-    return 'user_' + Math.random().toString(36).substr(2, 9) + Math.random().toString(36).substr(2, 9);
-}
-
-function getNoisyURL(visualPrompt, seed) {
-    const model = MODELS[Math.floor(Math.random() * MODELS.length)];
-    const legionID = generateLegionID();
-    const noise = Math.floor(Math.random() * 999999);
-    
-    // We append junk data (&ref, &rc, &uid) to confuse the caching layer
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt)}?width=720&height=1280&model=${model}&seed=${seed}&nologo=true&uid=${legionID}&ref=${noise}`;
-}
-
 // --- AUDIO ENGINE ---
 function speak(text) {
     return new Promise(resolve => {
@@ -46,10 +28,10 @@ function speak(text) {
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.9; u.pitch = 0.8;
         
+        // Android Voice Fix
         const voices = synth.getVoices();
         if (voices.length > 0) u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
 
-        // Hard limit 6s
         const t = setTimeout(resolve, 6000);
         u.onend = () => { clearTimeout(t); resolve(); };
         u.onerror = () => { clearTimeout(t); resolve(); };
@@ -57,70 +39,105 @@ function speak(text) {
     });
 }
 
-// --- BROADCAST LOOP ---
+// --- HYBRID RENDERER (Wan 2.1 + Flux) ---
 async function broadcastLoop() {
     if (!active) return;
 
     try {
-        // 1. GENERATE
-        ui.status.innerText = "LEGION: WRITING...";
+        // 1. WRITE SCENE
+        ui.status.innerText = "SYSTEM: WRITING...";
         const topic = ui.prompt.value;
         const scene = await director.getNextScene(topic);
 
-        // 2. SWARM RENDER
-        // We generate a fresh ID. To the server, we are User #8472
-        const currentID = generateLegionID(); 
-        ui.status.innerText = `LEGION: SPOOFING ID [${currentID.substring(0,6)}...]`;
+        // 2. REQUEST SOTA VIDEO (Puter)
+        ui.status.innerText = "SYSTEM: ALLOCATING GPU...";
+        ui.sub.innerText = ">> GENERATING VIDEO (WAN 2.1)...";
         
-        const seed = character.getSeed();
-        const url = getNoisyURL(scene.visual, seed);
-        
-        // 3. FORCE LOAD
-        // If this ID fails, we don't wait. We just loop and spawn a new ID.
-        let success = false;
+        let mediaSource = null;
+        let isVideo = false;
+
         try {
-            await new Promise((resolve, reject) => {
-                const img = new Image();
-                const t = setTimeout(() => reject("Timeout"), 8000); // 8s max
-                img.onload = () => { clearTimeout(t); resolve(); };
-                img.onerror = () => { clearTimeout(t); reject("Blocked"); };
-                img.src = url;
-            });
-            success = true;
-        } catch (err) {
-            console.warn("ID Blocked. Spawning new user...");
-            ui.sub.innerText = ">> ID BLOCKED. REROLLING IDENTITY...";
-        }
-
-        if (success) {
-            // 4. TRANSITION
-            ui.status.innerText = "LEGION: BROADCASTING";
-            vfx.trigger();
-            music.swell();
+            // We give Puter 15 seconds to generate video. 
+            // If it takes longer (Queue), we switch to Flux Image to keep flow.
+            const videoTask = puter.ai.txt2vid(scene.visual);
+            const timeoutTask = new Promise((_, reject) => setTimeout(() => reject("Timeout"), 15000));
             
-            setTimeout(() => { ui.img.src = url; }, 50);
+            // Race: Video vs Clock
+            const videoObj = await Promise.race([videoTask, timeoutTask]);
+            mediaSource = videoObj.src;
+            isVideo = true;
+            console.log("Wan 2.1 Success");
 
-            ui.sub.innerText = scene.narration;
-            await speak(scene.narration);
+        } catch (err) {
+            console.warn("Wan 2.1 Busy/Timeout. Switching to Flux.");
+            ui.status.innerText = "SYSTEM: FLUX FALLBACK...";
+            const seed = character.getSeed();
+            mediaSource = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true`;
+            isVideo = false;
         }
 
-        // 5. SPEED
-        // Legion mode requires almost no cool-down because every request is "New"
-        await new Promise(r => setTimeout(r, 1000));
+        // 3. PRELOAD
+        if (!isVideo) {
+            await new Promise(r => { 
+                const i = new Image(); i.src = mediaSource; i.onload = r; 
+            });
+        }
+
+        // 4. TRANSITION & PLAY
+        ui.status.innerText = "SYSTEM: BROADCASTING";
+        vfx.trigger();
+        music.swell();
+
+        if (isVideo) {
+            ui.img.style.opacity = 0;
+            ui.vid.src = mediaSource;
+            ui.vid.style.opacity = 1;
+            ui.vid.play();
+        } else {
+            ui.vid.style.opacity = 0;
+            ui.vid.pause();
+            ui.img.src = mediaSource;
+            ui.img.style.opacity = 1;
+        }
+
+        // 5. NARRATE
+        ui.sub.innerText = scene.narration;
+        await speak(scene.narration);
+
+        // 6. LOOP
+        broadcastLoop();
 
     } catch (e) {
-        await new Promise(r => setTimeout(r, 500));
+        console.error(e);
+        await new Promise(r => setTimeout(r, 2000));
+        broadcastLoop();
     }
-
-    broadcastLoop();
 }
 
-// --- IGNITION ---
-ui.btn.addEventListener('click', () => {
-    if (!ui.prompt.value) return;
-    ui.btn.innerText = "LEGION ACTIVE";
-    ui.panel.style.opacity = '0';
-    music.startDrone();
-    active = true;
-    broadcastLoop();
+// --- AUTHENTICATION HANDLER ---
+ui.btn.addEventListener('click', async () => {
+    if (!ui.prompt.value) return alert("Enter Mission!");
+    
+    ui.btn.innerText = "AUTHENTICATING...";
+    
+    try {
+        // 1. TRIGGER POPUP (Must be direct user action)
+        // This attempts to create a temp user or log you in
+        await puter.auth.signIn({ attempt_temp_user_creation: true });
+        
+        ui.btn.innerText = "ACCESS GRANTED";
+        ui.status.innerText = "SYSTEM: ONLINE";
+        ui.panel.style.opacity = '0';
+        
+        // 2. Start Systems
+        music.startDrone();
+        active = true;
+        
+        // 3. Start Loop
+        broadcastLoop();
+
+    } catch (err) {
+        alert("Authentication Failed. Please allow popups or try again.");
+        ui.btn.innerText = "RETRY CONNECTION";
+    }
 });
