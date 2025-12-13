@@ -1,0 +1,75 @@
+:root {
+    --neon: #00f3ff;
+    --glass: rgba(0, 0, 0, 0.85);
+    --bg: #000000;
+}
+
+body { margin: 0; background: var(--bg); color: #fff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; }
+
+/* FX LAYERS */
+#scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0), rgba(0,0,0,0) 2px, rgba(0,255,0,0.03) 2px, rgba(0,255,0,0.03) 4px);
+}
+#vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 11;
+    background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.95) 150%);
+}
+
+/* UI HEADER */
+header {
+    position: absolute; top: 0; left: 0; width: 100%; padding: 20px;
+    z-index: 20; display: flex; justify-content: space-between; align-items: center;
+    box-sizing: border-box; text-shadow: 0 0 10px var(--neon);
+    background: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+.brand { color: var(--neon); font-weight: bold; letter-spacing: 2px; font-size: 1.2rem; }
+#sysStatus { font-size: 0.7rem; color: #888; font-weight: bold; }
+
+/* THE STAGE */
+#stage {
+    position: relative; width: 100vw; height: 100vh;
+    background: #050505; display: flex; justify-content: center; align-items: center; overflow: hidden;
+}
+
+#sceneImg {
+    width: 100%; height: 100%; object-fit: cover;
+    /* Cinematic "Ken Burns" Pan */
+    animation: cinematicPan 20s infinite alternate ease-in-out;
+    opacity: 1; 
+}
+@keyframes cinematicPan { 0% { transform: scale(1.0); } 100% { transform: scale(1.15); } }
+
+/* NARRATIVE TEXT */
+#subtitleContainer {
+    position: absolute; bottom: 25%; width: 100%; 
+    display: flex; justify-content: center; z-index: 25;
+}
+#subtitleBox {
+    background: var(--glass); color: var(--neon); 
+    padding: 15px 20px; border-left: 3px solid var(--neon);
+    font-size: 1rem; max-width: 85%; line-height: 1.4;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px); border-radius: 0 4px 4px 0;
+}
+
+/* CONTROLS */
+#controlPanel {
+    position: absolute; bottom: 0; width: 100%; padding: 20px;
+    background: linear-gradient(to top, #000 80%, transparent);
+    display: flex; flex-direction: column; gap: 15px; z-index: 30;
+    box-sizing: border-box; transition: opacity 0.5s;
+}
+
+input {
+    width: 100%; background: #111; border: 1px solid #333; color: #fff; 
+    padding: 15px; font-family: inherit; font-size: 1rem; outline: none;
+    box-sizing: border-box; border-radius: 4px;
+}
+input:focus { border-color: var(--neon); box-shadow: 0 0 15px rgba(0, 243, 255, 0.2); }
+
+button {
+    width: 100%; background: var(--neon); color: #000; border: none; 
+    padding: 18px; font-weight: bold; font-size: 1rem; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 2px;
+}
