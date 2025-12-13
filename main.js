@@ -17,33 +17,24 @@ const ui = {
 };
 
 let active = false;
+let modelIndex = 0;
+const MODELS = ['turbo', 'flux', 'midjourney']; // Rotation list
 
-// --- FALLBACK STATIC ---
-const STATIC_URL = "https://image.pollinations.ai/prompt/static%20noise%20glitch%20cyberpunk?width=720&height=1280&nologo=true";
-
-// --- SPEECH ---
 function speak(text) {
     return new Promise(resolve => {
         if (!text) { resolve(); return; }
         if (synth.speaking) synth.cancel();
-        
         const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.9; 
-        u.pitch = 0.8;
-        
+        u.rate = 0.9; u.pitch = 0.8;
         const voices = synth.getVoices();
-        if (voices.length > 0) {
-            u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
-        }
-
-        const safeTimer = setTimeout(resolve, 6000);
-        u.onend = () => { clearTimeout(safeTimer); resolve(); };
-        u.onerror = () => { clearTimeout(safeTimer); resolve(); };
+        if (voices.length > 0) u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
+        const t = setTimeout(resolve, 5000);
+        u.onend = () => { clearTimeout(t); resolve(); };
+        u.onerror = () => { clearTimeout(t); resolve(); };
         try { synth.speak(u); } catch(e) { resolve(); }
     });
 }
 
-// --- MAIN LOOP ---
 async function broadcastLoop() {
     if (!active) return;
 
@@ -53,61 +44,55 @@ async function broadcastLoop() {
         const topic = ui.prompt.value;
         const scene = await director.getNextScene(topic);
 
-        // 2. RENDER (Using Turbo for Speed/Safety)
-        ui.status.innerText = "SYSTEM: RENDERING (TURBO)...";
+        // 2. RENDER (With Model Rotation)
+        const currentModel = MODELS[modelIndex % MODELS.length];
+        ui.status.innerText = `SYSTEM: RENDERING (${currentModel.toUpperCase()})...`;
+        
         const seed = character.getSeed();
-        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=turbo&seed=${seed}&nologo=true`;
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=${currentModel}&seed=${seed}&nologo=true`;
         
         // 3. PRELOAD
-        let loadedUrl = url;
-        try {
-            await new Promise((resolve, reject) => {
-                const img = new Image();
-                const timer = setTimeout(() => reject("Timeout"), 10000);
-                img.onload = () => { clearTimeout(timer); resolve(); };
-                img.onerror = () => { clearTimeout(timer); reject("Failed"); };
-                img.src = url;
-            });
-        } catch (err) {
-            loadedUrl = STATIC_URL;
-        }
+        await new Promise((resolve, reject) => {
+            const img = new Image();
+            const timer = setTimeout(() => reject("Timeout"), 10000);
+            
+            img.onload = () => { clearTimeout(timer); resolve(); };
+            img.onerror = () => { 
+                // If this model fails, switch to the next one for next time
+                modelIndex++;
+                clearTimeout(timer); 
+                reject("Load Failed"); 
+            };
+            img.src = url;
+        });
 
-        // 4. PLATINUM TRANSITION
+        // 4. DISPLAY
         ui.status.innerText = "SYSTEM: BROADCASTING";
-        
-        // Trigger Glitch
         vfx.trigger();
-        // Trigger Audio Swell
         music.swell();
         
-        // Swap Image
-        setTimeout(() => {
-            ui.img.src = loadedUrl;
-        }, 50);
+        setTimeout(() => { ui.img.src = url; }, 50);
 
-        // 5. NARRATE
         ui.sub.innerText = scene.narration;
         await speak(scene.narration);
 
-        // 6. COOL DOWN (Prevents Queue Errors)
-        await new Promise(r => setTimeout(r, 2000));
-
     } catch (e) {
-        console.error("Loop Error:", e);
-        await new Promise(r => setTimeout(r, 1000));
+        console.warn("Retrying...", e);
+        // If it failed, don't wait. Try again immediately with next model.
+        modelIndex++;
     }
 
+    // 5. LOOP
+    // Small delay to let the phone cool down
+    await new Promise(r => setTimeout(r, 1000));
     broadcastLoop();
 }
 
-// --- START ---
 ui.btn.addEventListener('click', () => {
     if (!ui.prompt.value) return;
     ui.btn.innerText = "SYSTEM ACTIVE";
     ui.panel.style.opacity = '0';
-    
-    music.startDrone(); // Unlock Audio
-    
+    music.startDrone();
     active = true;
     broadcastLoop();
 });
