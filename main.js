@@ -17,13 +17,11 @@ const ui = {
 };
 
 let active = false;
-let errorCount = 0;
 
-// --- FALLBACK STATIC URL ---
-// If the AI fails, we show this instead of black screen
+// --- STATIC FALLBACK ---
 const STATIC_URL = "https://image.pollinations.ai/prompt/static%20noise%20glitch%20cyberpunk?width=720&height=1280&nologo=true";
 
-// --- ROBUST SPEECH ---
+// --- SPEECH ---
 function speak(text) {
     return new Promise(resolve => {
         if (!text) { resolve(); return; }
@@ -38,8 +36,8 @@ function speak(text) {
             u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
         }
 
-        // Hard timeout: Audio forces next scene after 6s no matter what
-        const safeTimer = setTimeout(resolve, 6000);
+        // Timeout allows visual to linger while audio plays
+        const safeTimer = setTimeout(resolve, 8000);
 
         u.onend = () => { clearTimeout(safeTimer); resolve(); };
         u.onerror = () => { clearTimeout(safeTimer); resolve(); };
@@ -53,40 +51,36 @@ async function broadcastLoop() {
     if (!active) return;
 
     try {
-        // 1. GENERATE NARRATIVE
+        // 1. GENERATE
         ui.status.innerText = "SYSTEM: WRITING...";
         const topic = ui.prompt.value;
         const scene = await director.getNextScene(topic);
 
-        // 2. GENERATE VISUAL (With Error Handling)
+        // 2. RENDER
         ui.status.innerText = "SYSTEM: RENDERING...";
         
         const seed = character.getSeed();
-        // Add random cache-buster to prevent stuck images
         const cacheBuster = Math.floor(Math.random() * 100000);
         
-        // Use standard Flux model (Turbo is faster but Flux is better quality)
-        // If we hit too many errors, switch to Turbo temporarily
-        const model = errorCount > 2 ? 'turbo' : 'flux';
-        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=${model}&seed=${seed}&nologo=true&cb=${cacheBuster}`;
+        // Use 'turbo' periodically to save API load, 'flux' for quality
+        // Strategy: Alternate to avoid queue lock? No, just wait longer.
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&cb=${cacheBuster}`;
         
-        // 3. PRELOAD WITH TIMEOUT
+        // 3. PRELOAD
         let loadedUrl = url;
         try {
             await new Promise((resolve, reject) => {
                 const img = new Image();
-                const timer = setTimeout(() => reject("Timeout"), 10000); // 10s max load
+                // Increased timeout to 15s for slow mobile networks
+                const timer = setTimeout(() => reject("Timeout"), 15000);
                 
                 img.onload = () => { clearTimeout(timer); resolve(); };
-                img.onerror = () => { clearTimeout(timer); reject("Load Failed"); };
+                img.onerror = () => { clearTimeout(timer); reject("Failed"); };
                 img.src = url;
             });
-            errorCount = 0; // Reset errors on success
         } catch (err) {
-            console.warn("Image Load Failed:", err);
-            errorCount++;
-            loadedUrl = STATIC_URL; // Switch to static if API fails
-            ui.sub.innerText = ">> SIGNAL LOST. RE-ESTABLISHING...";
+            console.warn("Load Error, using static");
+            loadedUrl = STATIC_URL;
         }
 
         // 4. TRANSITION
@@ -95,20 +89,20 @@ async function broadcastLoop() {
         
         setTimeout(() => {
             ui.img.src = loadedUrl;
-        }, 50); // Instant swap inside glitch
+        }, 50);
 
         // 5. NARRATE
         ui.sub.innerText = scene.narration;
         await speak(scene.narration);
 
-        // 6. RATE LIMIT DELAY (The "Queue Full" Fix)
-        // We MUST wait 5 seconds before asking for the next image
-        ui.status.innerText = "SYSTEM: COOLING DOWN...";
-        await new Promise(r => setTimeout(r, 5000));
+        // 6. CRITICAL: COOL DOWN (10 Seconds)
+        // This prevents the "Queue Full" error shown in your video
+        ui.status.innerText = "SYSTEM: RECHARGING...";
+        await new Promise(r => setTimeout(r, 10000));
 
     } catch (e) {
-        console.error("Critical Loop Error:", e);
-        await new Promise(r => setTimeout(r, 2000));
+        console.error("Loop Error:", e);
+        await new Promise(r => setTimeout(r, 5000));
     }
 
     // 7. RECURSE
