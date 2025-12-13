@@ -17,40 +17,34 @@ const ui = {
 };
 
 let active = false;
+let errorCount = 0;
 
-// --- ROBUST SPEECH (Non-Blocking) ---
+// --- FALLBACK STATIC URL ---
+// If the AI fails, we show this instead of black screen
+const STATIC_URL = "https://image.pollinations.ai/prompt/static%20noise%20glitch%20cyberpunk?width=720&height=1280&nologo=true";
+
+// --- ROBUST SPEECH ---
 function speak(text) {
-    // If speech fails, we do NOT want to crash the visual loop
     return new Promise(resolve => {
+        if (!text) { resolve(); return; }
         if (synth.speaking) synth.cancel();
         
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.9; 
         u.pitch = 0.8;
         
-        // Samsung Voice Grabber
         const voices = synth.getVoices();
         if (voices.length > 0) {
             u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
         }
 
-        // Force resolve after 5s so video keeps moving even if audio breaks
-        const safeTimer = setTimeout(resolve, 5000);
+        // Hard timeout: Audio forces next scene after 6s no matter what
+        const safeTimer = setTimeout(resolve, 6000);
 
-        u.onend = () => {
-            clearTimeout(safeTimer);
-            resolve();
-        };
-        u.onerror = () => {
-            clearTimeout(safeTimer);
-            resolve();
-        };
+        u.onend = () => { clearTimeout(safeTimer); resolve(); };
+        u.onerror = () => { clearTimeout(safeTimer); resolve(); };
 
-        try {
-            synth.speak(u);
-        } catch(e) {
-            resolve(); // Fail gracefully
-        }
+        try { synth.speak(u); } catch(e) { resolve(); }
     });
 }
 
@@ -59,64 +53,75 @@ async function broadcastLoop() {
     if (!active) return;
 
     try {
-        // 1. BRAIN (With Visual Feedback)
-        ui.status.innerText = "SYSTEM: WRITING SCENE...";
-        ui.sub.innerText = ">> NEURAL UPLINK ESTABLISHED...";
-        
+        // 1. GENERATE NARRATIVE
+        ui.status.innerText = "SYSTEM: WRITING...";
         const topic = ui.prompt.value;
         const scene = await director.getNextScene(topic);
 
-        // 2. RENDER (With Preload Timeout)
-        ui.status.innerText = "SYSTEM: RENDERING 4K...";
-        ui.sub.innerText = ">> GENERATING FLUX ARTIFACT...";
+        // 2. GENERATE VISUAL (With Error Handling)
+        ui.status.innerText = "SYSTEM: RENDERING...";
         
         const seed = character.getSeed();
-        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true`;
+        // Add random cache-buster to prevent stuck images
+        const cacheBuster = Math.floor(Math.random() * 100000);
         
-        // Safety Preloader: Don't wait more than 8s for an image
-        await new Promise(resolve => {
-            const img = new Image();
-            const timer = setTimeout(resolve, 8000); // Watchdog
-            img.onload = () => { clearTimeout(timer); resolve(); };
-            img.onerror = () => { clearTimeout(timer); resolve(); };
-            img.src = url;
-        });
+        // Use standard Flux model (Turbo is faster but Flux is better quality)
+        // If we hit too many errors, switch to Turbo temporarily
+        const model = errorCount > 2 ? 'turbo' : 'flux';
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=${model}&seed=${seed}&nologo=true&cb=${cacheBuster}`;
+        
+        // 3. PRELOAD WITH TIMEOUT
+        let loadedUrl = url;
+        try {
+            await new Promise((resolve, reject) => {
+                const img = new Image();
+                const timer = setTimeout(() => reject("Timeout"), 10000); // 10s max load
+                
+                img.onload = () => { clearTimeout(timer); resolve(); };
+                img.onerror = () => { clearTimeout(timer); reject("Load Failed"); };
+                img.src = url;
+            });
+            errorCount = 0; // Reset errors on success
+        } catch (err) {
+            console.warn("Image Load Failed:", err);
+            errorCount++;
+            loadedUrl = STATIC_URL; // Switch to static if API fails
+            ui.sub.innerText = ">> SIGNAL LOST. RE-ESTABLISHING...";
+        }
 
-        // 3. TRANSITION
+        // 4. TRANSITION
         ui.status.innerText = "SYSTEM: BROADCASTING";
+        vfx.trigger();
         
-        vfx.trigger(); // Glitch
-        music.swell(); // Audio dynamic
-        
-        // Instant Swap
-        ui.img.style.opacity = 0;
         setTimeout(() => {
-            ui.img.src = url;
-            ui.img.style.opacity = 1;
-        }, 100);
+            ui.img.src = loadedUrl;
+        }, 50); // Instant swap inside glitch
 
-        // 4. NARRATE
+        // 5. NARRATE
         ui.sub.innerText = scene.narration;
         await speak(scene.narration);
 
+        // 6. RATE LIMIT DELAY (The "Queue Full" Fix)
+        // We MUST wait 5 seconds before asking for the next image
+        ui.status.innerText = "SYSTEM: COOLING DOWN...";
+        await new Promise(r => setTimeout(r, 5000));
+
     } catch (e) {
-        console.error("Frame Drop:", e);
-        ui.sub.innerText = ">> SIGNAL INTERFERENCE. REALIGNING...";
+        console.error("Critical Loop Error:", e);
         await new Promise(r => setTimeout(r, 2000));
     }
 
-    // 5. NEXT FRAME
+    // 7. RECURSE
     broadcastLoop();
 }
 
-// --- IGNITION ---
+// --- START ---
 ui.btn.addEventListener('click', () => {
     if (!ui.prompt.value) return;
     
-    ui.btn.innerText = "SYSTEM ACTIVATED";
-    ui.panel.style.opacity = '0'; // Hide UI
+    ui.btn.innerText = "SYSTEM ACTIVE";
+    ui.panel.style.opacity = '0';
     
-    // Attempt Audio Start (Non-Blocking)
     music.startDrone();
     
     active = true;
