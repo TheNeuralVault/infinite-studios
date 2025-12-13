@@ -1,15 +1,14 @@
-# INFINITE STUDIO: ARIA PLATINUM (A53 EDITION)
+## 🚀 UNLOCKING GOD MODE (Google Colab)
 
-## Launch Sequence
-1. **Unmute your phone.**
-2. **Type your Mission** (e.g., "Aria exploring the ruins").
-3. **TAP "INITIATE STREAM".**
-4. **Wait 3-5 Seconds.** The text in the box will change to "WRITING SCENE...".
-5. The first image will load. The glitch will trigger. Audio will fade in.
+1. Open **[Google Colab](https://colab.research.google.com)** on your phone or PC.
+2. Create a **New Notebook**.
+3. Paste the **Python Script** provided.
+4. Click **Runtime > Change Runtime Type > T4 GPU**.
+5. Click **Play**.
+6. Wait for the line: `✅ YOUR API URL IS: https://xxxx-xxxx.trycloudflare.com`
+7. Copy that URL.
+8. Go to your Infinite Studio app.
+9. **Long Press (Hold)** the "INITIATE STREAM" button for 1 second.
+10. Paste the URL.
 
-## Troubleshooting
-- **No Sound?** Tap the screen once while the movie plays. Android blocks audio until you interact.
-- **Still Frozen?** Refresh. The new "Watchdog" code prevents it from getting stuck on loading forever.
-- **Recording:** Use your phone's built-in Screen Recorder (Media Sounds).
-
-**Titanium & Glass. Forever Ascending.**
+**Result:** Your phone now controls a dedicated NVIDIA T4 GPU running on Google's servers. No queues. No bans. Total ownership.
