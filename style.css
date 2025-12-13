@@ -1,62 +1,16 @@
-:root { --neon: #00f3ff; --bg: #000000; --glass: rgba(0,0,0,0.9); }
-body { margin: 0; background: var(--bg); color: #fff; font-family: monospace; overflow: hidden; height: 100vh; }
-
-#scanlines {
-    position: fixed; inset: 0; pointer-events: none; z-index: 10;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,200,0.02) 3px);
-}
-#vignette {
-    position: fixed; inset: 0; pointer-events: none; z-index: 11;
-    background: radial-gradient(circle, transparent 40%, #000 140%);
-}
-
-header {
-    position: absolute; top: 0; left: 0; width: 100%; padding: 20px; z-index: 20;
-    display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;
-    background: linear-gradient(to bottom, #000, transparent);
-}
+:root { --neon: #00f3ff; --bg: #000000; --glass: rgba(0, 0, 0, 0.85); }
+body { margin: 0; background: var(--bg); color: #fff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; }
+#scanlines { position: fixed; inset: 0; pointer-events: none; z-index: 10; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,200,0.03) 3px); }
+#vignette { position: fixed; inset: 0; pointer-events: none; z-index: 11; background: radial-gradient(circle, transparent 40%, #000 140%); }
+header { position: absolute; top: 0; left: 0; width: 100%; padding: 20px; z-index: 20; display: flex; justify-content: space-between; background: linear-gradient(to bottom, #000, transparent); box-sizing: border-box;}
 .brand { color: var(--neon); font-weight: bold; letter-spacing: 2px; }
-#sysStatus { font-size: 0.7rem; color: #888; font-weight: bold; }
-
-#stage {
-    position: relative; width: 100vw; height: 100vh; background: #050505;
-    display: flex; justify-content: center; align-items: center; overflow: hidden;
-}
-
-/* DOUBLE BUFFER LAYERS */
-.viewer {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
-    opacity: 0; transition: opacity 0.5s ease-in-out;
-    transform: translate3d(0,0,0); /* Force GPU */
-}
-.viewer.active {
-    opacity: 1;
-    animation: cinematicPan 20s infinite alternate ease-in-out;
-}
-@keyframes cinematicPan { 0% { transform: scale(1.0) translate3d(0,0,0); } 100% { transform: scale(1.15) translate3d(0,0,0); } }
-
-/* GLITCH FX */
-.glitch-active { filter: invert(1) hue-rotate(180deg); transform: scale(1.02) !important; transition: 0.1s; }
-
-#subtitleContainer {
-    position: absolute; bottom: 25%; width: 100%; display: flex; justify-content: center; z-index: 25;
-}
-#subtitleBox {
-    background: var(--glass); color: var(--neon); padding: 15px; border-left: 3px solid var(--neon);
-    font-size: 1rem; max-width: 85%; box-shadow: 0 10px 30px #000;
-    max-height: 100px; overflow: hidden; text-overflow: ellipsis;
-}
-
-#controlPanel {
-    position: absolute; bottom: 0; width: 100%; padding: 20px;
-    background: linear-gradient(to top, #000 90%, transparent);
-    display: flex; flex-direction: column; gap: 10px; z-index: 30; box-sizing: border-box;
-}
-input {
-    width: 100%; background: #111; border: 1px solid #333; color: #fff; padding: 15px;
-    border-radius: 4px; font-family: inherit; font-size: 1rem; outline: none;
-}
-button {
-    width: 100%; background: var(--neon); color: #000; border: none; padding: 15px;
-    font-weight: bold; font-size: 1rem; border-radius: 4px; letter-spacing: 2px;
-}
+#sysStatus { font-size: 0.7rem; color: #888; }
+#stage { position: relative; width: 100vw; height: 100vh; background: #050505; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+#sceneImg { width: 100%; height: 100%; object-fit: cover; animation: zoom 20s infinite alternate ease-in-out; will-change: transform; transition: opacity 0.1s; }
+@keyframes zoom { 0% { transform: scale(1.0); } 100% { transform: scale(1.15); } }
+.glitch-active { filter: invert(1); transform: scale(1.05); }
+#subtitleContainer { position: absolute; bottom: 25%; width: 100%; display: flex; justify-content: center; z-index: 25; }
+#subtitleBox { background: var(--glass); color: var(--neon); padding: 15px; border-left: 3px solid var(--neon); font-size: 1rem; max-width: 85%; box-shadow: 0 10px 30px #000; }
+#controlPanel { position: absolute; bottom: 0; width: 100%; padding: 20px; background: linear-gradient(to top, #000 90%, transparent); display: flex; flex-direction: column; gap: 10px; z-index: 30; box-sizing: border-box;}
+input { width: 100%; background: #111; border: 1px solid #333; color: #fff; padding: 15px; border-radius: 4px; font-size: 1rem; outline: none; }
+button { width: 100%; background: var(--neon); color: #000; border: none; padding: 15px; font-weight: bold; font-size: 1rem; border-radius: 4px; letter-spacing: 2px; }
