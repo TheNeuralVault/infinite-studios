@@ -2,6 +2,7 @@ import { Director, character } from './brain.js';
 import { Soundtrack } from './soundtrack.js';
 import { VFX } from './vfx.js';
 
+// --- INIT SYSTEMS ---
 const director = new Director();
 const music = new Soundtrack();
 const vfx = new VFX();
@@ -17,47 +18,62 @@ const ui = {
 };
 
 let active = false;
-let customAPI = localStorage.getItem("magnus_api") || ""; // Remember previous link
+let customAPI = localStorage.getItem("magnus_api") || "";
 
-// --- AUDIO ---
+// --- ON-SCREEN LOGGER (For Debugging) ---
+function log(msg, type="NORMAL") {
+    console.log(`[${type}] ${msg}`);
+    // If it's an error, show it in the subtitle box briefly so you know
+    if (type === "ERROR") {
+        ui.sub.innerText = `>> ERROR: ${msg}`;
+        ui.sub.style.color = "red";
+        setTimeout(() => ui.sub.style.color = "#00f3ff", 2000);
+    }
+    // Always update status bar
+    ui.status.innerText = msg.toUpperCase().substring(0, 20);
+}
+
+// --- ROBUST AUDIO ---
 function speak(text) {
     return new Promise(resolve => {
         if (!text) { resolve(); return; }
         if (synth.speaking) synth.cancel();
+        
         const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.9; u.pitch = 0.8; 
+        u.rate = 0.9; u.pitch = 0.8;
+        
         const voices = synth.getVoices();
         if(voices.length) u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
         
-        // 5s Timeout prevents audio freeze
+        // Short timeout to keep momentum
         const t = setTimeout(resolve, 5000);
         u.onend = () => { clearTimeout(t); resolve(); };
         u.onerror = () => { clearTimeout(t); resolve(); };
+        
         try { synth.speak(u); } catch(e) { resolve(); }
     });
 }
 
-// --- BROADCAST LOOP ---
+// --- THE BROADCAST LOOP ---
 async function broadcastLoop() {
     if (!active) return;
 
     try {
-        ui.status.innerText = "SYSTEM: WRITING...";
+        // 1. BRAIN
+        log("WRITING SCENE...");
         const topic = ui.prompt.value;
         const scene = await director.getNextScene(topic);
 
-        ui.status.innerText = "SYSTEM: RENDERING...";
-        
+        // 2. RENDER (The Critical Junction)
         let mediaUrl = null;
         let source = "FLUX";
         
-        // 1. TRY GOOGLE COLAB GPU (If linked)
-        if (customAPI && customAPI.includes("trycloudflare.com")) {
-             ui.status.innerText = "SYSTEM: CONTACTING T4 GPU...";
+        // CHECK GPU (With strict 3s Timeout)
+        if (customAPI && customAPI.includes("trycloudflare")) {
+             log("CONTACTING GPU...");
              try {
-                 // Fast 5s Timeout check
                  const controller = new AbortController();
-                 const id = setTimeout(() => controller.abort(), 5000);
+                 const id = setTimeout(() => controller.abort(), 3000); // 3s Max wait
 
                  const res = await fetch(`${customAPI}/generate`, {
                      method: 'POST',
@@ -70,38 +86,39 @@ async function broadcastLoop() {
                  if (res.ok) {
                      const blob = await res.blob();
                      mediaUrl = URL.createObjectURL(blob);
-                     source = "COLAB T4";
+                     source = "T4 GPU";
                  } else {
-                     throw new Error("GPU 500 Error");
+                     throw new Error("GPU 500");
                  }
              } catch(e) {
-                 console.warn("GPU Failed, switching to Flux:", e);
-                 ui.status.innerText = "SYSTEM: GPU TIMEOUT. FLUX ENGAGED.";
+                 log("GPU DEAD. FLUX ACTIVE.", "ERROR");
+                 // Don't clear customAPI yet, just skip it for this frame
              }
         }
 
-        // 2. FALLBACK TO FLUX (If Colab failed or wasn't set)
+        // FALLBACK TO FLUX (If GPU failed)
         if (!mediaUrl) {
+             log("RENDERING FLUX...");
              const seed = character.getSeed();
              const uid = Math.random().toString(36).substring(7);
              mediaUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&uid=${uid}`;
         }
 
         // 3. PRELOAD (Visual Watchdog)
-        await new Promise((resolve, reject) => {
+        log("BUFFERING...");
+        await new Promise((resolve) => {
             const img = new Image();
-            const t = setTimeout(() => resolve(), 8000); // Force proceed after 8s
+            const t = setTimeout(() => resolve(), 8000); // 8s Force Proceed
             img.onload = () => { clearTimeout(t); resolve(); };
-            img.onerror = () => { clearTimeout(t); resolve(); }; // Never crash
+            img.onerror = () => { clearTimeout(t); resolve(); };
             img.src = mediaUrl;
         });
 
         // 4. DISPLAY
-        ui.status.innerText = `SYSTEM: BROADCASTING [${source}]`;
+        log(`BROADCASTING [${source}]`);
         vfx.trigger();
         music.swell();
         
-        // Instant Swap
         ui.img.style.opacity = 0;
         setTimeout(() => { 
             ui.img.src = mediaUrl; 
@@ -115,44 +132,48 @@ async function broadcastLoop() {
         await new Promise(r => setTimeout(r, 1000));
 
     } catch (e) {
-        console.error("System Error", e);
+        log("SYSTEM RECOVERING...", "ERROR");
+        console.error(e);
         await new Promise(r => setTimeout(r, 1000));
     }
     broadcastLoop();
 }
 
-// --- IGNITION LOGIC ---
+// --- CONTROLS ---
+
+// 1. STANDARD START
 ui.btn.addEventListener('click', () => {
     const val = ui.prompt.value.trim();
 
-    // 1. LINK MODE: User pasted a Cloudflare URL
-    if (val.includes("trycloudflare.com")) {
+    // LINK GPU MODE
+    if (val.includes("trycloudflare")) {
         localStorage.setItem("magnus_api", val);
         customAPI = val;
-        alert(`✅ GPU LINKED: ${val}\n\nNow clear the box and type your movie concept.`);
+        alert("✅ GPU LINKED. Clear box and enter mission.");
         ui.prompt.value = "";
-        ui.prompt.placeholder = "GPU Linked! Enter Mission...";
-        return; // Don't start movie yet
+        return;
     }
 
-    // 2. MOVIE MODE: Start the show
-    if (!val) return alert("Enter a Mission!");
-
+    // MOVIE MODE
+    if (!val) return alert("Enter Mission!");
+    
     ui.btn.innerText = "SYSTEM ACTIVE";
-    ui.btn.style.background = "#00ff00";
-    ui.btn.style.color = "#000";
-    
-    // Fade Controls
-    ui.panel.style.transition = "opacity 1s";
     ui.panel.style.opacity = '0';
-    
     music.startDrone();
     active = true;
     broadcastLoop();
 });
 
-// Restore previous link on load
-if (customAPI) {
-    ui.status.innerText = "SYSTEM: GPU LINKED";
-    ui.prompt.placeholder = "GPU Ready. Enter Mission...";
-}
+// 2. FACTORY RESET (Double Tap Title)
+// Use this if the system is totally stuck on an old link
+document.querySelector('.brand').addEventListener('click', () => {
+    if(confirm("RESET SYSTEM SETTINGS?")) {
+        localStorage.removeItem("magnus_api");
+        customAPI = "";
+        alert("System Reset. GPU Unlinked. Reloading...");
+        window.location.reload();
+    }
+});
+
+// Load Check
+if (customAPI) ui.status.innerText = "GPU LINKED (READY)";
