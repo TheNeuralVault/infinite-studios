@@ -3,14 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>INFINITE: WAN 2.2 SOTA</title>
+    <title>INFINITE: WAN SOTA</title>
     <link rel="stylesheet" href="style.css">
     
-    <!-- THE KEY TO THE GARDEN -->
+    <!-- THE POWER SOURCE -->
     <script src="https://js.puter.com/v2/"></script>
-    
-    <!-- FALLBACK BRAIN -->
-    <link rel="preconnect" href="https://text.pollinations.ai">
 </head>
 <body>
     <div id="scanlines"></div>
@@ -18,23 +15,28 @@
     
     <main id="app">
         <header>
-            <div class="brand">INFINITE://WAN-2.2</div>
-            <div class="hud" id="sysStatus">SYSTEM: ONLINE</div>
+            <div class="brand">INFINITE://WAN</div>
+            <div class="hud"><span id="sysStatus">SYSTEM: OFFLINE</span></div>
         </header>
 
         <div id="stage">
             <!-- Video Player for SOTA Content -->
-            <video id="scenePlayer" autoplay muted playsinline loop style="opacity:0"></video>
-            <img id="staticOverlay" src="https://image.pollinations.ai/prompt/static%20noise?nologo=true">
+            <video id="sceneVid" autoplay muted playsinline loop style="opacity:0"></video>
+            
+            <!-- Static Image Layer (While buffering) -->
+            <img id="sceneImg" src="https://image.pollinations.ai/prompt/static%20noise?width=720&height=1280&nologo=true" style="opacity:1">
             
             <div id="subtitleContainer">
-                <div id="subtitleBox">Awaiting Neural Uplink...</div>
+                <div id="subtitleBox">Awaiting Authentication...</div>
             </div>
         </div>
 
         <div id="controlPanel">
-            <input type="text" id="prompt" placeholder="Enter High-End Concept..." autocomplete="off">
-            <button id="startBtn">IGNITE WAN ENGINE</button>
+            <div class="input-row">
+                <input type="text" id="prompt" placeholder="Enter Mission (e.g. Cyberpunk Chase)..." autocomplete="off">
+            </div>
+            <!-- This button now triggers the Popup -->
+            <button id="startBtn">CONNECT & IGNITE</button>
         </div>
     </main>
 
