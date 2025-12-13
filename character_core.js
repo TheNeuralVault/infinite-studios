@@ -1,8 +1,3 @@
-/**
- * ARTIFACT: CHARACTER DNA
- * Protocol: Visual Anchor & Seed Locking
- */
-
 export class CharacterEngine {
     constructor() {
         this.dna = {
@@ -11,16 +6,11 @@ export class CharacterEngine {
             Outfit: "Translucent iridescent raincoat over black tactical tech-wear",
             Vibe: "Cinematic, moody, hyper-realistic, 8k resolution, volumetric lighting"
         };
-        
-        // COMPRESSED ANCHOR
         this.anchor = `${this.dna.Visuals}, ${this.dna.Outfit}, ${this.dna.Vibe}`;
-
-        // IDENTITY SEED LOCK
         this.baseSeed = 8808; 
     }
 
     enrichPrompt(action) {
-        // [DNA] + [ACTION] + [PHYSICS ENGINE]
         return `
             ${this.dna.ID}, ${this.anchor}, 
             ACTION: ${action}, 
@@ -30,7 +20,6 @@ export class CharacterEngine {
     }
     
     getSeed() {
-        // Micro-variance (0-100) allows dynamic posing while keeping the face
         return this.baseSeed + Math.floor(Math.random() * 100);
     }
     
