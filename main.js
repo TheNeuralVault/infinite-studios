@@ -17,8 +17,10 @@ const ui = {
 };
 
 let active = false;
-// Load saved URL if it exists
-let customAPI = localStorage.getItem("magnus_api") || ""; 
+
+// --- HARDCODED GPU LINK ---
+// This is the direct tunnel to your Google Colab T4 GPU
+const customAPI = "https://passage-down-decide-honor.trycloudflare.com";
 
 // --- ROBUST AUDIO ---
 function speak(text) {
@@ -45,37 +47,35 @@ async function broadcastLoop() {
         const topic = ui.prompt.value;
         const scene = await director.getNextScene(topic);
 
-        ui.status.innerText = "SYSTEM: RENDERING...";
+        ui.status.innerText = "SYSTEM: CONTACTING T4 GPU...";
         
         let mediaUrl;
         
-        // 1. CHECK FOR COLAB GPU CONNECTION
-        if (customAPI && customAPI.includes("trycloudflare.com")) {
-             ui.status.innerText = "SYSTEM: COLAB T4 GPU...";
-             try {
-                 const res = await fetch(`${customAPI}/generate`, {
-                     method: 'POST',
-                     headers: {'Content-Type': 'application/json'},
-                     body: JSON.stringify({ prompt: scene.visual })
-                 });
-                 if (!res.ok) throw new Error("GPU Error");
-                 const blob = await res.blob();
-                 mediaUrl = URL.createObjectURL(blob);
-             } catch(e) {
-                 console.warn("Colab Disconnected. Falling back.");
-                 ui.status.innerText = "SYSTEM: GPU LOST. FALLBACK...";
-             }
-        }
+        // 1. EXECUTE HARDLINE CONNECTION
+        try {
+             const res = await fetch(`${customAPI}/generate`, {
+                 method: 'POST',
+                 headers: {'Content-Type': 'application/json'},
+                 body: JSON.stringify({ prompt: scene.visual })
+             });
+             
+             if (!res.ok) throw new Error("GPU Offline");
+             
+             const blob = await res.blob();
+             mediaUrl = URL.createObjectURL(blob);
+             console.log(">> GPU RENDER SUCCESS");
 
-        // 2. FALLBACK TO FLUX (If Colab is missing/dead)
-        if (!mediaUrl) {
-             ui.status.innerText = "SYSTEM: FLUX CLOUD...";
+        } catch(e) {
+             console.warn("Colab Tunnel Dead. Falling back to Flux.");
+             ui.status.innerText = "SYSTEM: GPU LOST. FLUX BACKUP...";
+             
+             // Fallback to Pollinations if Colab disconnects
              const seed = character.getSeed();
              const uid = Math.random().toString(36).substring(7);
              mediaUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&uid=${uid}`;
         }
 
-        // 3. PRELOAD
+        // 2. PRELOAD
         await new Promise((resolve, reject) => {
             const img = new Image();
             const t = setTimeout(() => reject("Timeout"), 15000); // 15s wait for GPU
@@ -84,7 +84,7 @@ async function broadcastLoop() {
             img.src = mediaUrl;
         });
 
-        // 4. PLAY
+        // 3. PLAY
         ui.status.innerText = "SYSTEM: BROADCASTING";
         vfx.trigger();
         music.swell();
@@ -93,8 +93,8 @@ async function broadcastLoop() {
         ui.sub.innerText = scene.narration;
         await speak(scene.narration);
 
-        // 5. LOOP
-        await new Promise(r => setTimeout(r, 2000));
+        // 4. LOOP
+        await new Promise(r => setTimeout(r, 1000));
 
     } catch (e) {
         await new Promise(r => setTimeout(r, 1000));
@@ -102,41 +102,21 @@ async function broadcastLoop() {
     broadcastLoop();
 }
 
-// --- SMART IGNITION ---
+// --- IGNITION ---
 ui.btn.addEventListener('click', () => {
-    const inputVal = ui.prompt.value.trim();
+    if (!ui.prompt.value) return alert("Enter Mission!");
 
-    // MAGNUS SMART-LINK PROTOCOL
-    // If the user pasted the Cloudflare URL, save it and don't start the movie yet.
-    if (inputVal.includes("trycloudflare.com")) {
-        localStorage.setItem("magnus_api", inputVal);
-        customAPI = inputVal;
-        
-        // Visual Confirmation
-        ui.prompt.value = "";
-        ui.prompt.placeholder = "GPU LINKED! Enter Mission Now...";
-        ui.status.innerText = "SYSTEM: T4 GPU ONLINE";
-        ui.btn.innerText = "GPU LINKED - CLICK TO START";
-        ui.btn.style.background = "#00ff00";
-        ui.btn.style.color = "#000";
-        
-        alert("✅ NEURAL BRIDGE ESTABLISHED.\n\nThe T4 Supercomputer is linked.\nNow type your movie concept (e.g. 'Cyberpunk Rain') and click again.");
-        return;
-    }
-
-    if (!inputVal) return alert("Enter a Concept!");
-
-    // Start the Show
-    ui.btn.innerText = "SYSTEM ACTIVE";
+    // Visual Confirmation
+    ui.btn.innerText = "GPU HARDLINE ACTIVE";
+    ui.btn.style.background = "#00ff00";
+    ui.btn.style.color = "#000";
+    ui.status.innerText = "SYSTEM: T4 ONLINE";
+    
     ui.panel.style.opacity = '0';
     music.startDrone();
     active = true;
     broadcastLoop();
 });
 
-// On Load check if we already have a GPU saved
-if (localStorage.getItem("magnus_api")) {
-    customAPI = localStorage.getItem("magnus_api");
-    ui.status.innerText = "SYSTEM: GPU READY";
-    ui.prompt.placeholder = "GPU Linked. Enter Mission...";
-        }
+// Set initial status
+ui.status.innerText = "SYSTEM: GPU LINKED";
