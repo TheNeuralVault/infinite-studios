@@ -8,7 +8,7 @@ const vfx = new VFX();
 const synth = window.speechSynthesis;
 
 const ui = {
-    layers: [document.getElementById('layerA'), document.getElementById('layerB')],
+    img: document.getElementById('sceneImg'),
     sub: document.getElementById('subtitleBox'),
     btn: document.getElementById('startBtn'),
     prompt: document.getElementById('prompt'),
@@ -16,140 +16,111 @@ const ui = {
     status: document.getElementById('sysStatus')
 };
 
-let activeLayer = 0; // Toggles between 0 and 1
-let isRunning = false;
-
-// THE OUROBOROS BUFFER
-// We keep 2 scenes in memory: [Current, Next]
-let sceneBuffer = [];
-
-// --- ASYNC GENERATOR (The Future) ---
-async function generateSceneData(topic) {
-    ui.status.innerText = "SYSTEM: PREDICTING FUTURE...";
-    
-    // 1. Write Script
-    const narrative = await director.getNextScene(topic);
-    
-    // 2. Shotgun Render (Multiplex)
-    // We try Flux first, if it takes > 6s we assume queue full and use Turbo
-    const seed = character.getSeed();
-    const uid = Math.random().toString(36).substring(7);
-    
-    // Primary High Quality
-    const fluxUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(narrative.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&uid=${uid}`;
-    // Backup Fast
-    const turboUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(narrative.visual)}?width=720&height=1280&model=turbo&seed=${seed}&nologo=true&uid=${uid}`;
-
-    // 3. Preload Race
-    let finalUrl = fluxUrl;
-    try {
-        await new Promise((resolve, reject) => {
-            const img = new Image();
-            const timer = setTimeout(() => {
-                // If Flux is slow, switch URL to Turbo and try again
-                img.src = turboUrl; 
-            }, 6000); 
-            
-            // Hard timeout at 12s (Total failure -> Static)
-            const hardStop = setTimeout(() => reject("Timeout"), 12000);
-
-            img.onload = () => { clearTimeout(timer); clearTimeout(hardStop); resolve(); };
-            img.onerror = () => { clearTimeout(timer); clearTimeout(hardStop); reject("Error"); };
-            img.src = fluxUrl;
-        });
-        // If we reach here, img.src loaded successfully (either flux or turbo)
-        finalUrl = fluxUrl; // (Or turbo if it switched)
-    } catch(e) {
-        finalUrl = "https://image.pollinations.ai/prompt/static%20noise%20glitch?width=720&height=1280&nologo=true";
-    }
-
-    return { url: finalUrl, text: narrative.narration };
-}
-
-// --- BUFFER MANAGER ---
-async function fillBuffer(topic) {
-    while (sceneBuffer.length < 2 && isRunning) {
-        const scene = await generateSceneData(topic);
-        sceneBuffer.push(scene);
-        ui.status.innerText = `BUFFER: ${sceneBuffer.length} READY`;
-    }
-}
-
-// --- PLAYER LOOP (The Present) ---
-async function playLoop() {
-    if (!isRunning) return;
-
-    if (sceneBuffer.length === 0) {
-        ui.status.innerText = "BUFFERING...";
-        await new Promise(r => setTimeout(r, 1000));
-        playLoop();
-        return;
-    }
-
-    // 1. Get Next Scene
-    const scene = sceneBuffer.shift(); // Remove from queue
-    
-    // 2. Trigger Background Refill (Async)
-    fillBuffer(ui.prompt.value);
-
-    // 3. Transition Layers
-    const currentImg = ui.layers[activeLayer];
-    const nextLayerIndex = (activeLayer + 1) % 2;
-    const nextImg = ui.layers[nextLayerIndex];
-
-    // Set source hidden
-    nextImg.src = scene.url;
-    
-    // VFX Trigger
-    vfx.trigger(nextImg);
-    music.swell();
-
-    // Crossfade
-    currentImg.classList.remove('active');
-    nextImg.classList.add('active');
-    activeLayer = nextLayerIndex;
-
-    // 4. Narrate
-    ui.sub.innerText = scene.text;
-    await speak(scene.text);
-
-    // 5. Loop immediately (No cool down needed because buffer does the waiting)
-    playLoop();
-}
+let active = false;
+let customAPI = localStorage.getItem("magnus_api") || ""; // Save URL between reloads
 
 // --- AUDIO ---
 function speak(text) {
     return new Promise(resolve => {
         if (!text) { resolve(); return; }
         if (synth.speaking) synth.cancel();
-        
         const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.9; u.pitch = 0.8;
+        u.rate = 0.9; u.pitch = 0.8; 
         const voices = synth.getVoices();
-        if (voices.length > 0) u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
-        
-        // Timeout based on text length to keep pace moving
-        const duration = Math.min(text.length * 100, 6000); 
-        const t = setTimeout(resolve, duration);
-        
+        if(voices.length) u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
+        const t = setTimeout(resolve, 6000);
         u.onend = () => { clearTimeout(t); resolve(); };
         u.onerror = () => { clearTimeout(t); resolve(); };
         try { synth.speak(u); } catch(e) { resolve(); }
     });
 }
 
-// --- IGNITION ---
-ui.btn.addEventListener('click', async () => {
+// --- BROADCAST LOOP ---
+async function broadcastLoop() {
+    if (!active) return;
+
+    try {
+        ui.status.innerText = "SYSTEM: WRITING...";
+        const topic = ui.prompt.value;
+        const scene = await director.getNextScene(topic);
+
+        ui.status.innerText = "SYSTEM: RENDERING...";
+        
+        let mediaUrl;
+        
+        // CHECK: Do we have a Custom Colab URL?
+        if (customAPI && customAPI.includes("trycloudflare.com")) {
+             ui.status.innerText = "SYSTEM: COLAB GPU (T4)...";
+             try {
+                 // Hit your private server
+                 const res = await fetch(`${customAPI}/generate`, {
+                     method: 'POST',
+                     headers: {'Content-Type': 'application/json'},
+                     body: JSON.stringify({ prompt: scene.visual })
+                 });
+                 const blob = await res.blob();
+                 mediaUrl = URL.createObjectURL(blob);
+             } catch(e) {
+                 console.warn("Colab Disconnected. Falling back to Flux.");
+                 customAPI = ""; // Reset if dead
+             }
+        }
+
+        // Fallback to Flux if Colab is not set or dead
+        if (!mediaUrl) {
+             ui.status.innerText = "SYSTEM: FLUX CLOUD...";
+             const seed = character.getSeed();
+             const uid = Math.random().toString(36).substring(7);
+             mediaUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&uid=${uid}`;
+        }
+
+        // Preload
+        await new Promise((resolve, reject) => {
+            const img = new Image();
+            const t = setTimeout(() => reject("Timeout"), 10000);
+            img.onload = () => { clearTimeout(t); resolve(); };
+            img.onerror = () => { clearTimeout(t); reject("Failed"); };
+            img.src = mediaUrl;
+        });
+
+        // Play
+        ui.status.innerText = "SYSTEM: BROADCASTING";
+        vfx.trigger();
+        music.swell();
+        
+        setTimeout(() => { ui.img.src = mediaUrl; }, 50);
+        ui.sub.innerText = scene.narration;
+        await speak(scene.narration);
+
+        await new Promise(r => setTimeout(r, 2000));
+
+    } catch (e) {
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    broadcastLoop();
+}
+
+// --- CONFIG MODE ---
+// Long press "INITIATE" to set Custom URL
+let pressTimer;
+ui.btn.addEventListener('touchstart', () => {
+    pressTimer = setTimeout(() => {
+        const url = prompt("ENTER COLAB URL (trycloudflare.com):", customAPI);
+        if(url) {
+            customAPI = url;
+            localStorage.setItem("magnus_api", url);
+            alert("GPU LINKED. POWER UNLIMITED.");
+        }
+    }, 1000);
+});
+ui.btn.addEventListener('touchend', () => clearTimeout(pressTimer));
+
+// --- START ---
+ui.btn.addEventListener('click', () => {
     if (!ui.prompt.value) return;
     ui.btn.innerText = "SYSTEM ACTIVE";
     ui.panel.style.opacity = '0';
-    
     music.startDrone();
-    isRunning = true;
-    
-    // Prime the pump
-    ui.status.innerText = "PRIMING BUFFER...";
-    await fillBuffer(ui.prompt.value);
-    
-    playLoop();
+    active = true;
+    broadcastLoop();
 });
