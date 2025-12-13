@@ -1,63 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-P1PCVNCCE4"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-P1PCVNCCE4');
-    </script>
-
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Infinite Studios | Neural Matrix Vault</title>
-    <meta name="description" content="AI-Generated Endless Cinematic Experience. Powered by Neural Matrix Vault.">
-    <meta property="og:title" content="Infinite Studios">
-    <meta property="og:description" content="Titanium & Glass. Endless AI Storytelling.">
-    <meta property="og:url" content="https://theneuralvault.github.io/infinite-studios/">
-    <meta property="og:type" content="website">
+    <title>INFINITE STUDIOS // PLATINUM EDITION</title>
     
+    <!-- PURE METADATA: NO TRACKING -->
+    <meta name="description" content="The Alpha Protocol. Infinite Generative Cinema.">
+    <meta name="theme-color" content="#E5E4E2"> <!-- Platinum Hex -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="scanlines"></div>
+    <!-- ATMOSPHERIC LAYERS -->
+    <div id="grain"></div>
     <div id="vignette"></div>
 
     <main id="app">
+        <!-- HEADS UP DISPLAY -->
         <header>
-            <div class="brand">NEURAL://VAULT</div>
+            <div class="brand">NEURAL://VAULT <span class="edition">PLATINUM</span></div>
             <div class="hud">
-                <span id="sysStatus">SYSTEM: IDLE</span>
-                <div id="liveIndicator">● LIVE</div>
+                <span id="sysStatus">SYSTEM: STANDBY</span>
+                <span id="liveIndicator">● BROADCASTING</span>
             </div>
         </header>
 
+        <!-- VISUAL CORE: DOUBLE BUFFERING SYSTEM -->
         <div id="stage">
-            <img id="sceneImg" src="https://image.pollinations.ai/prompt/static%20digital%20noise?width=720&height=1280&nologo=true">
+            <!-- Layer A and B swap opacity for gapless transitions -->
+            <img id="layerA" class="active" src="https://image.pollinations.ai/prompt/static%20noise?width=720&height=1280&nologo=true">
+            <img id="layerB" src="https://image.pollinations.ai/prompt/static%20noise?width=720&height=1280&nologo=true">
             
             <div id="subtitleContainer">
-                <div id="subtitleBox">Awaiting Neural Injection...</div>
+                <div id="subtitleBox">Awaiting Platinum Injection...</div>
             </div>
         </div>
 
-        <!-- CONTROL DECK -->
+        <!-- COMMAND DECK -->
         <div id="controlPanel">
-            <!-- Character Architect -->
-            <div id="dnaPanel">
-                <input type="text" id="charInput" placeholder="Define Protagonist (e.g. Cyberpunk Samurai)..." autocomplete="off">
+            <div class="input-row">
+                <input type="text" id="charInput" placeholder="IDENTITY (e.g. The Platinum Knight)" autocomplete="off">
             </div>
-
-            <!-- Mission Control -->
-            <div id="missionPanel">
-                <input type="text" id="prompt" placeholder="Enter Initial Mission..." autocomplete="off">
-                <button id="startBtn">IGNITE SINGULARITY</button>
+            <div class="input-row">
+                <input type="text" id="prompt" placeholder="MISSION (e.g. Save the World)" autocomplete="off">
+                <button id="startBtn">INITIATE</button>
             </div>
-            
-            <div class="config-row">
-                 <small id="gpuStatus">GPU LINK: OFFLINE</small>
-            </div>
+            <div id="gpuStatus">GPU UPLINK: OFFLINE</div>
         </div>
     </main>
 
