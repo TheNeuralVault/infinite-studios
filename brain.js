@@ -9,37 +9,32 @@ export class Director {
     }
 
     async getNextScene(topic) {
-        // Maintain Narrative Flow
         const history = this.context.slice(-2).join(" -> ");
         const name = character.getName();
 
-        // THE SYSTEM PROMPT (In-Context Learning)
         const system = `
-            ROLE: Cyberpunk Director.
-            CHARACTER: ${name} (Platinum hair, violet eyes).
+            ROLE: Cyberpunk Film Director.
+            CHARACTER: ${name}.
             MISSION: ${topic}.
             PREVIOUS: ${history}.
-            
-            TASK: Write Scene #${this.context.length + 1}.
-            
-            RULES:
-            1. Narrate in present tense.
-            2. Visuals in brackets [ ].
-            3. ${name} must be the focus.
-            
-            OUTPUT FORMAT: 
-            "She bypasses the firewall... [Aria connecting a data cable to a glowing terminal]"
+            TASK: Scene #${this.context.length + 1}.
+            FORMAT: Narration [Visuals]
         `;
 
         try {
-            // Signal Cloud Brain
-            const res = await fetch(`${this.baseUrl}${encodeURIComponent(system)}`);
+            // CRITICAL FIX: 5 Second Timeout prevents freezing
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 5000);
+
+            const res = await fetch(`${this.baseUrl}${encodeURIComponent(system)}`, {
+                signal: controller.signal
+            });
+            clearTimeout(id);
             const raw = await res.text();
             
             let narration = "";
             let action = "";
 
-            // Parse Response
             if (raw.includes('[')) {
                 narration = raw.split('[')[0].trim();
                 action = raw.split('[')[1].replace(']', '').trim();
@@ -48,17 +43,15 @@ export class Director {
                 action = `${topic}, cinematic scene of ${name}`;
             }
 
-            // Inject Platinum Visuals
             const finalVisual = character.enrichPrompt(action);
-
             this.context.push(narration);
             return { narration, visual: finalVisual };
 
         } catch (e) {
-            // Offline Fallback
+            // Safe Fallback so loop continues
             return { 
-                narration: "Re-establishing neural uplink...", 
-                visual: character.enrichPrompt("standing in digital void, static interference") 
+                narration: "Re-calibrating visual sensors...", 
+                visual: character.enrichPrompt("static noise, glitch, digital void") 
             };
         }
     }
