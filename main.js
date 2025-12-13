@@ -8,8 +8,7 @@ const vfx = new VFX();
 const synth = window.speechSynthesis;
 
 const ui = {
-    vid: document.getElementById('sceneVid'),
-    img: document.getElementById('sceneImg'),
+    layers: [document.getElementById('layerA'), document.getElementById('layerB')],
     sub: document.getElementById('subtitleBox'),
     btn: document.getElementById('startBtn'),
     prompt: document.getElementById('prompt'),
@@ -17,9 +16,108 @@ const ui = {
     status: document.getElementById('sysStatus')
 };
 
-let active = false;
+let activeLayer = 0; // Toggles between 0 and 1
+let isRunning = false;
 
-// --- AUDIO ENGINE ---
+// THE OUROBOROS BUFFER
+// We keep 2 scenes in memory: [Current, Next]
+let sceneBuffer = [];
+
+// --- ASYNC GENERATOR (The Future) ---
+async function generateSceneData(topic) {
+    ui.status.innerText = "SYSTEM: PREDICTING FUTURE...";
+    
+    // 1. Write Script
+    const narrative = await director.getNextScene(topic);
+    
+    // 2. Shotgun Render (Multiplex)
+    // We try Flux first, if it takes > 6s we assume queue full and use Turbo
+    const seed = character.getSeed();
+    const uid = Math.random().toString(36).substring(7);
+    
+    // Primary High Quality
+    const fluxUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(narrative.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true&uid=${uid}`;
+    // Backup Fast
+    const turboUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(narrative.visual)}?width=720&height=1280&model=turbo&seed=${seed}&nologo=true&uid=${uid}`;
+
+    // 3. Preload Race
+    let finalUrl = fluxUrl;
+    try {
+        await new Promise((resolve, reject) => {
+            const img = new Image();
+            const timer = setTimeout(() => {
+                // If Flux is slow, switch URL to Turbo and try again
+                img.src = turboUrl; 
+            }, 6000); 
+            
+            // Hard timeout at 12s (Total failure -> Static)
+            const hardStop = setTimeout(() => reject("Timeout"), 12000);
+
+            img.onload = () => { clearTimeout(timer); clearTimeout(hardStop); resolve(); };
+            img.onerror = () => { clearTimeout(timer); clearTimeout(hardStop); reject("Error"); };
+            img.src = fluxUrl;
+        });
+        // If we reach here, img.src loaded successfully (either flux or turbo)
+        finalUrl = fluxUrl; // (Or turbo if it switched)
+    } catch(e) {
+        finalUrl = "https://image.pollinations.ai/prompt/static%20noise%20glitch?width=720&height=1280&nologo=true";
+    }
+
+    return { url: finalUrl, text: narrative.narration };
+}
+
+// --- BUFFER MANAGER ---
+async function fillBuffer(topic) {
+    while (sceneBuffer.length < 2 && isRunning) {
+        const scene = await generateSceneData(topic);
+        sceneBuffer.push(scene);
+        ui.status.innerText = `BUFFER: ${sceneBuffer.length} READY`;
+    }
+}
+
+// --- PLAYER LOOP (The Present) ---
+async function playLoop() {
+    if (!isRunning) return;
+
+    if (sceneBuffer.length === 0) {
+        ui.status.innerText = "BUFFERING...";
+        await new Promise(r => setTimeout(r, 1000));
+        playLoop();
+        return;
+    }
+
+    // 1. Get Next Scene
+    const scene = sceneBuffer.shift(); // Remove from queue
+    
+    // 2. Trigger Background Refill (Async)
+    fillBuffer(ui.prompt.value);
+
+    // 3. Transition Layers
+    const currentImg = ui.layers[activeLayer];
+    const nextLayerIndex = (activeLayer + 1) % 2;
+    const nextImg = ui.layers[nextLayerIndex];
+
+    // Set source hidden
+    nextImg.src = scene.url;
+    
+    // VFX Trigger
+    vfx.trigger(nextImg);
+    music.swell();
+
+    // Crossfade
+    currentImg.classList.remove('active');
+    nextImg.classList.add('active');
+    activeLayer = nextLayerIndex;
+
+    // 4. Narrate
+    ui.sub.innerText = scene.text;
+    await speak(scene.text);
+
+    // 5. Loop immediately (No cool down needed because buffer does the waiting)
+    playLoop();
+}
+
+// --- AUDIO ---
 function speak(text) {
     return new Promise(resolve => {
         if (!text) { resolve(); return; }
@@ -27,117 +125,31 @@ function speak(text) {
         
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.9; u.pitch = 0.8;
-        
-        // Android Voice Fix
         const voices = synth.getVoices();
         if (voices.length > 0) u.voice = voices.find(v => v.lang === 'en-US') || voices[0];
-
-        const t = setTimeout(resolve, 6000);
+        
+        // Timeout based on text length to keep pace moving
+        const duration = Math.min(text.length * 100, 6000); 
+        const t = setTimeout(resolve, duration);
+        
         u.onend = () => { clearTimeout(t); resolve(); };
         u.onerror = () => { clearTimeout(t); resolve(); };
         try { synth.speak(u); } catch(e) { resolve(); }
     });
 }
 
-// --- HYBRID RENDERER (Wan 2.1 + Flux) ---
-async function broadcastLoop() {
-    if (!active) return;
-
-    try {
-        // 1. WRITE SCENE
-        ui.status.innerText = "SYSTEM: WRITING...";
-        const topic = ui.prompt.value;
-        const scene = await director.getNextScene(topic);
-
-        // 2. REQUEST SOTA VIDEO (Puter)
-        ui.status.innerText = "SYSTEM: ALLOCATING GPU...";
-        ui.sub.innerText = ">> GENERATING VIDEO (WAN 2.1)...";
-        
-        let mediaSource = null;
-        let isVideo = false;
-
-        try {
-            // We give Puter 15 seconds to generate video. 
-            // If it takes longer (Queue), we switch to Flux Image to keep flow.
-            const videoTask = puter.ai.txt2vid(scene.visual);
-            const timeoutTask = new Promise((_, reject) => setTimeout(() => reject("Timeout"), 15000));
-            
-            // Race: Video vs Clock
-            const videoObj = await Promise.race([videoTask, timeoutTask]);
-            mediaSource = videoObj.src;
-            isVideo = true;
-            console.log("Wan 2.1 Success");
-
-        } catch (err) {
-            console.warn("Wan 2.1 Busy/Timeout. Switching to Flux.");
-            ui.status.innerText = "SYSTEM: FLUX FALLBACK...";
-            const seed = character.getSeed();
-            mediaSource = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.visual)}?width=720&height=1280&model=flux&seed=${seed}&nologo=true`;
-            isVideo = false;
-        }
-
-        // 3. PRELOAD
-        if (!isVideo) {
-            await new Promise(r => { 
-                const i = new Image(); i.src = mediaSource; i.onload = r; 
-            });
-        }
-
-        // 4. TRANSITION & PLAY
-        ui.status.innerText = "SYSTEM: BROADCASTING";
-        vfx.trigger();
-        music.swell();
-
-        if (isVideo) {
-            ui.img.style.opacity = 0;
-            ui.vid.src = mediaSource;
-            ui.vid.style.opacity = 1;
-            ui.vid.play();
-        } else {
-            ui.vid.style.opacity = 0;
-            ui.vid.pause();
-            ui.img.src = mediaSource;
-            ui.img.style.opacity = 1;
-        }
-
-        // 5. NARRATE
-        ui.sub.innerText = scene.narration;
-        await speak(scene.narration);
-
-        // 6. LOOP
-        broadcastLoop();
-
-    } catch (e) {
-        console.error(e);
-        await new Promise(r => setTimeout(r, 2000));
-        broadcastLoop();
-    }
-}
-
-// --- AUTHENTICATION HANDLER ---
+// --- IGNITION ---
 ui.btn.addEventListener('click', async () => {
-    if (!ui.prompt.value) return alert("Enter Mission!");
+    if (!ui.prompt.value) return;
+    ui.btn.innerText = "SYSTEM ACTIVE";
+    ui.panel.style.opacity = '0';
     
-    ui.btn.innerText = "AUTHENTICATING...";
+    music.startDrone();
+    isRunning = true;
     
-    try {
-        // 1. TRIGGER POPUP (Must be direct user action)
-        // This attempts to create a temp user or log you in
-        await puter.auth.signIn({ attempt_temp_user_creation: true });
-        
-        ui.btn.innerText = "ACCESS GRANTED";
-        ui.status.innerText = "SYSTEM: ONLINE";
-        ui.panel.style.opacity = '0';
-        
-        // 2. Start Systems
-        music.startDrone();
-        active = true;
-        
-        // 3. Start Loop
-        broadcastLoop();
-
-    } catch (err) {
-        alert("Authentication Failed. Please allow popups or try again.");
-        ui.btn.innerText = "RETRY CONNECTION";
-    }
+    // Prime the pump
+    ui.status.innerText = "PRIMING BUFFER...";
+    await fillBuffer(ui.prompt.value);
+    
+    playLoop();
 });
